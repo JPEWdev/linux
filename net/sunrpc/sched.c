@@ -748,6 +748,9 @@ static void __rpc_execute(struct rpc_task *task)
 	dprintk("RPC: %5u __rpc_execute flags=0x%x\n",
 			task->tk_pid, task->tk_flags);
 
+	if (task->tk_client->cl_kill_new_tasks)
+		rpc_exit(task, -EIO);
+
 	WARN_ON_ONCE(RPC_IS_QUEUED(task));
 	if (RPC_IS_QUEUED(task))
 		return;
