@@ -90,6 +90,7 @@ enum {
 	Opt_resvport, Opt_noresvport,
 	Opt_fscache, Opt_nofscache,
 	Opt_migration, Opt_nomigration,
+	Opt_serverfailed, Opt_noserverfailed,
 
 	/* Mount options that take integer arguments */
 	Opt_port,
@@ -151,6 +152,8 @@ static const match_table_t nfs_mount_option_tokens = {
 	{ Opt_nofscache, "nofsc" },
 	{ Opt_migration, "migration" },
 	{ Opt_nomigration, "nomigration" },
+	{ Opt_serverfailed, "serverfailed" },
+	{ Opt_noserverfailed, "noserverfailed" },
 
 	{ Opt_port, "port=%s" },
 	{ Opt_rsize, "rsize=%s" },
@@ -678,6 +681,8 @@ static void nfs_show_mount_options(struct seq_file *m, struct nfs_server *nfss,
 	seq_printf(m, ",timeo=%lu", 10U * nfss->client->cl_timeout->to_initval / HZ);
 	seq_printf(m, ",retrans=%u", nfss->client->cl_timeout->to_retries);
 	seq_printf(m, ",sec=%s", nfs_pseudoflavour_to_name(nfss->client->cl_auth->au_flavor));
+
+	seq_printf(m, nfss->nfs_client->cl_failed ? ",serverfailed" : ",noserverfailed");
 
 	if (version != 4)
 		nfs_show_mountd_options(m, nfss, showdefaults);
@@ -1333,6 +1338,12 @@ static int nfs_parse_mount_options(char *raw,
 			break;
 		case Opt_nomigration:
 			mnt->options &= ~NFS_OPTION_MIGRATION;
+			break;
+		case Opt_serverfailed:
+			mnt->flags |= NFS_MOUNT_SERVERFAILED;
+			break;
+		case Opt_noserverfailed:
+			mnt->flags &= ~NFS_MOUNT_SERVERFAILED;
 			break;
 
 		/*
@@ -2196,6 +2207,8 @@ out_no_address:
 	return -EINVAL;
 }
 
+#define NFS_REMOUNT_CHANGE_FLAGS (NFS_MOUNT_SERVERFAILED)
+
 #define NFS_REMOUNT_CMP_FLAGMASK ~(NFS_MOUNT_INTR \
 		| NFS_MOUNT_SECURE \
 		| NFS_MOUNT_TCP \
@@ -2204,7 +2217,8 @@ out_no_address:
 		| NFS_MOUNT_NONLM \
 		| NFS_MOUNT_BROKEN_SUID \
 		| NFS_MOUNT_STRICTLOCK \
-		| NFS_MOUNT_LEGACY_INTERFACE)
+		| NFS_MOUNT_LEGACY_INTERFACE \
+		| NFS_REMOUNT_CHANGE_FLAGS)
 
 #define NFS_MOUNT_CMP_FLAGMASK (NFS_REMOUNT_CMP_FLAGMASK & \
 		~(NFS_MOUNT_UNSHARED | NFS_MOUNT_NORESVPORT))
@@ -2213,12 +2227,14 @@ static int
 nfs_compare_and_set_remount_data(struct nfs_server *nfss,
 				 struct nfs_parsed_mount_data *data)
 {
+	struct rpc_clnt *cl = nfss->client;
+
 	if ((data->flags ^ nfss->flags) & NFS_REMOUNT_CMP_FLAGMASK ||
 	    data->rsize != nfss->rsize ||
 	    data->wsize != nfss->wsize ||
 	    data->version != nfss->nfs_client->rpc_ops->version ||
 	    data->minorversion != nfss->nfs_client->cl_minorversion ||
-	    !nfs_auth_info_match(&data->auth_info, nfss->client->cl_auth->au_flavor) ||
+	    !nfs_auth_info_match(&data->auth_info, cl->cl_auth->au_flavor) ||
 	    data->acregmin != nfss->acregmin / HZ ||
 	    data->acregmax != nfss->acregmax / HZ ||
 	    data->acdirmin != nfss->acdirmin / HZ ||
@@ -2229,19 +2245,24 @@ nfs_compare_and_set_remount_data(struct nfs_server *nfss,
 			  (struct sockaddr *)&nfss->nfs_client->cl_addr))
 		return -EINVAL;
 
-	if (data->retrans != nfss->client->cl_timeout->to_retries ||
-	    data->timeo != (10U * nfss->client->cl_timeout->to_initval / HZ)) {
+	/* Update flags */
+	nfss->flags = (nfss->flags & ~NFS_REMOUNT_CHANGE_FLAGS) |
+		(data->flags & NFS_REMOUNT_CHANGE_FLAGS);
+
+	if (data->retrans != cl->cl_timeout->to_retries ||
+	    data->timeo != (10U * cl->cl_timeout->to_initval / HZ)) {
 		/* Note that this will affect all mounts from the same server,
 		 * that use the same protocol.  The timeouts are always forced
 		 * to be the same.
 		 */
-		struct rpc_clnt *cl = nfss->client;
 		if (cl->cl_timeout != &cl->cl_timeout_default)
 			memcpy(&cl->cl_timeout_default, cl->cl_timeout,
 			       sizeof(struct rpc_timeout));
 		cl->cl_timeout_default.to_retries = data->retrans;
 		cl->cl_timeout_default.to_initval = data->timeo * HZ / 10U;
 	}
+
+	nfs_client_failed(nfss->nfs_client, !!(nfss->flags & NFS_MOUNT_SERVERFAILED));
 
 	return 0;
 }
