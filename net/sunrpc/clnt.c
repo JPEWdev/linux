@@ -850,11 +850,9 @@ void rpc_shutdown_client(struct rpc_clnt *clnt)
 			clnt->cl_program->name,
 			rcu_dereference(clnt->cl_xprt)->servername);
 
-	while (!list_empty(&clnt->cl_tasks)) {
-		rpc_killall_tasks(clnt);
-		wait_event_timeout(destroy_wait,
-			list_empty(&clnt->cl_tasks), 1*HZ);
-	}
+	clnt->cl_kill_new_tasks = true;
+	rpc_killall_tasks(clnt);
+	wait_event(destroy_wait, list_empty(&clnt->cl_tasks));
 
 	rpc_release_client(clnt);
 }
