@@ -160,6 +160,10 @@ rpc_clnt_debugfs_register(struct rpc_clnt *clnt)
 	if (!debugfs_create_symlink("xprt", clnt->cl_debugfs, name))
 		goto out_err;
 
+	if (!debugfs_create_bool("kill_new_tasks", S_IRUSR | S_IWUSR,
+				 clnt->cl_debugfs, &clnt->cl_kill_new_tasks))
+		goto out_err;
+
 	return;
 out_err:
 	debugfs_remove_recursive(clnt->cl_debugfs);
