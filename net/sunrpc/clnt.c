@@ -626,6 +626,7 @@ static struct rpc_clnt *__rpc_clone_client(struct rpc_create_args *args,
 	new->cl_noretranstimeo = clnt->cl_noretranstimeo;
 	new->cl_discrtry = clnt->cl_discrtry;
 	new->cl_chatty = clnt->cl_chatty;
+	new->cl_kill_new_tasks = clnt->cl_kill_new_tasks;
 	return new;
 
 out_err:
@@ -818,9 +819,6 @@ void rpc_killall_tasks(struct rpc_clnt *clnt)
 {
 	struct rpc_task	*rovr;
 
-
-	if (list_empty(&clnt->cl_tasks))
-		return;
 	dprintk("RPC:       killing all tasks for client %p\n", clnt);
 	/*
 	 * Spin lock all_tasks to prevent changes...
