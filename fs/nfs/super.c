@@ -2210,26 +2210,38 @@ out_no_address:
 		~(NFS_MOUNT_UNSHARED | NFS_MOUNT_NORESVPORT))
 
 static int
-nfs_compare_remount_data(struct nfs_server *nfss,
-			 struct nfs_parsed_mount_data *data)
+nfs_compare_and_set_remount_data(struct nfs_server *nfss,
+				 struct nfs_parsed_mount_data *data)
 {
 	if ((data->flags ^ nfss->flags) & NFS_REMOUNT_CMP_FLAGMASK ||
 	    data->rsize != nfss->rsize ||
 	    data->wsize != nfss->wsize ||
 	    data->version != nfss->nfs_client->rpc_ops->version ||
 	    data->minorversion != nfss->nfs_client->cl_minorversion ||
-	    data->retrans != nfss->client->cl_timeout->to_retries ||
 	    !nfs_auth_info_match(&data->auth_info, nfss->client->cl_auth->au_flavor) ||
 	    data->acregmin != nfss->acregmin / HZ ||
 	    data->acregmax != nfss->acregmax / HZ ||
 	    data->acdirmin != nfss->acdirmin / HZ ||
 	    data->acdirmax != nfss->acdirmax / HZ ||
-	    data->timeo != (10U * nfss->client->cl_timeout->to_initval / HZ) ||
 	    data->nfs_server.port != nfss->port ||
 	    data->nfs_server.addrlen != nfss->nfs_client->cl_addrlen ||
 	    !rpc_cmp_addr((struct sockaddr *)&data->nfs_server.address,
 			  (struct sockaddr *)&nfss->nfs_client->cl_addr))
 		return -EINVAL;
+
+	if (data->retrans != nfss->client->cl_timeout->to_retries ||
+	    data->timeo != (10U * nfss->client->cl_timeout->to_initval / HZ)) {
+		/* Note that this will affect all mounts from the same server,
+		 * that use the same protocol.  The timeouts are always forced
+		 * to be the same.
+		 */
+		struct rpc_clnt *cl = nfss->client;
+		if (cl->cl_timeout != &cl->cl_timeout_default)
+			memcpy(&cl->cl_timeout_default, cl->cl_timeout,
+			       sizeof(struct rpc_timeout));
+		cl->cl_timeout_default.to_retries = data->retrans;
+		cl->cl_timeout_default.to_initval = data->timeo * HZ / 10U;
+	}
 
 	return 0;
 }
@@ -2244,7 +2256,8 @@ nfs_remount(struct super_block *sb, int *flags, char *raw_data)
 	struct nfs4_mount_data *options4 = (struct nfs4_mount_data *)raw_data;
 	u32 nfsvers = nfss->nfs_client->rpc_ops->version;
 
-	sync_filesystem(sb);
+	if (sb->s_readonly_remount)
+		sync_filesystem(sb);
 
 	/*
 	 * Userspace mount programs that send binary options generally send
@@ -2295,7 +2308,7 @@ nfs_remount(struct super_block *sb, int *flags, char *raw_data)
 		*flags |= MS_SYNCHRONOUS;
 
 	/* compare new mount options with old ones */
-	error = nfs_compare_remount_data(nfss, data);
+	error = nfs_compare_and_set_remount_data(nfss, data);
 out:
 	kfree(data);
 	return error;
