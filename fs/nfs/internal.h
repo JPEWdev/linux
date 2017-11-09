@@ -90,6 +90,7 @@ struct nfs_client_initdata {
  */
 struct nfs_parsed_mount_data {
 	int			flags;
+	int			flags_mask;
 	unsigned int		rsize, wsize;
 	unsigned int		timeo, retrans;
 	unsigned int		acregmin, acregmax,
