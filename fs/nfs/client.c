@@ -328,6 +328,10 @@ static struct nfs_client *nfs_match_client(const struct nfs_client_initdata *dat
 		if (clp->cl_cons_state < 0)
 			continue;
 
+		/* Don't match clients that don't want to be shared */
+		if (test_bit(NFS_CS_UNSHARED, &clp->cl_flags))
+			continue;
+
 		/* Different NFS versions cannot share the same nfs_client */
 		if (clp->rpc_ops != data->nfs_mod->rpc_ops)
 			continue;
@@ -428,7 +432,7 @@ init_client(struct nfs_client *new, const struct nfs_client_initdata *cl_init)
  */
 struct nfs_client *nfs_get_client(const struct nfs_client_initdata *cl_init)
 {
-	struct nfs_client *clp, *new = NULL;
+	struct nfs_client *clp = NULL, *new = NULL;
 	struct nfs_net *nn = net_generic(cl_init->net, nfs_net_id);
 	const struct nfs_rpc_ops *rpc_ops = cl_init->nfs_mod->rpc_ops;
 
@@ -441,7 +445,8 @@ struct nfs_client *nfs_get_client(const struct nfs_client_initdata *cl_init)
 	do {
 		spin_lock(&nn->nfs_client_lock);
 
-		clp = nfs_match_client(cl_init);
+		if (!test_bit(NFS_CS_UNSHARED, &cl_init->init_flags))
+			clp = nfs_match_client(cl_init);
 		if (clp) {
 			spin_unlock(&nn->nfs_client_lock);
 			if (new)

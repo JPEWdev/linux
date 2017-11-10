@@ -852,6 +852,8 @@ static int nfs4_set_client(struct nfs_server *server,
 		set_bit(NFS_CS_MIGRATION, &cl_init.init_flags);
 	if (test_bit(NFS_MIG_TSM_POSSIBLE, &server->mig_status))
 		set_bit(NFS_CS_TSM_POSSIBLE, &cl_init.init_flags);
+	if (server->flags & NFS_MOUNT_UNSHARED)
+		__set_bit(NFS_CS_UNSHARED, &cl_init.init_flags);
 
 	/* Allocate or find a client reference we can use */
 	clp = nfs_get_client(&cl_init);
@@ -910,6 +912,8 @@ struct nfs_client *nfs4_set_ds_client(struct nfs_server *mds_srv,
 
 	if (mds_srv->flags & NFS_MOUNT_NORESVPORT)
 		__set_bit(NFS_CS_NORESVPORT, &cl_init.init_flags);
+	if (mds_srv->flags & NFS_MOUNT_UNSHARED)
+		__set_bit(NFS_CS_UNSHARED, &cl_init.init_flags);
 
 	/*
 	 * Set an authflavor equual to the MDS value. Use the MDS nfs_client
