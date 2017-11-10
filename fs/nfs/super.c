@@ -911,6 +911,11 @@ void nfs_umount_begin(struct super_block *sb)
 	rpc = server->client;
 	if (!IS_ERR(rpc))
 		rpc_killall_tasks(rpc);
+
+	rpc = server->nfs_client->cl_rpcclient;
+	if (test_bit(NFS_CS_UNSHARED, &server->nfs_client->cl_flags) &&
+	    !IS_ERR(rpc))
+		rpc_killall_tasks(rpc);
 }
 EXPORT_SYMBOL_GPL(nfs_umount_begin);
 
@@ -2272,6 +2277,9 @@ nfs_compare_and_set_remount_data(struct nfs_server *nfss,
 
 	__set_rpc_clnt_failed(nfss->client, serverfailed);
 	__set_rpc_clnt_failed(nfss->client_acl, serverfailed);
+	if (test_bit(NFS_CS_UNSHARED, &nfss->nfs_client->cl_flags))
+		__set_rpc_clnt_failed(nfss->nfs_client->cl_rpcclient,
+				      serverfailed);
 
 	return 0;
 }
