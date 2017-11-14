@@ -758,6 +758,37 @@ error:
 	return error;
 }
 
+static void
+fail_rpc_client(struct rpc_clnt *client, bool failed)
+{
+	if (IS_ERR(client))
+		return;
+
+	client->cl_kill_new_tasks = failed;
+	if (failed)
+		rpc_killall_tasks(client);
+}
+
+void
+nfs_client_failed(struct nfs_client *client, bool failed)
+{
+	struct nfs_server *server;
+
+	if (client->cl_failed == failed)
+		return;
+
+	dprintk("%s: Client %u %s", __func__, client->cl_id,
+		failed ? "failed" : "restored");
+
+	client->cl_failed = failed;
+	fail_rpc_client(client->cl_rpcclient, failed);
+
+	list_for_each_entry_rcu(server, &client->cl_superblocks, client_link) {
+		fail_rpc_client(server->client, failed);
+		fail_rpc_client(server->client_acl, failed);
+	}
+}
+
 /*
  * Load up the server record from information gained in an fsinfo record
  */
