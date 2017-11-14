@@ -27,6 +27,7 @@ struct nfs41_impl_id;
 struct nfs_client {
 	atomic_t		cl_count;
 	atomic_t		cl_mds_count;
+	unsigned int		cl_id;		/* client id */
 	int			cl_cons_state;	/* current construction state (-ve: init error) */
 #define NFS_CS_READY		0		/* ready to be used */
 #define NFS_CS_INITING		1		/* busy initialising */
@@ -120,6 +121,7 @@ struct nfs_client {
 #endif
 
 	struct net		*cl_net;
+	struct dentry		*cl_debugfs;	/* debugfs entry */
 };
 
 /*
@@ -131,6 +133,7 @@ struct nfs_server {
 						 * that share the same client
 						 */
 	struct list_head	master_link;	/* link in master servers list */
+	unsigned int		id;		/* server id */
 	struct rpc_clnt *	client;		/* RPC client handle */
 	struct rpc_clnt *	client_acl;	/* ACL RPC client handle */
 	struct nlm_host		*nlm_host;	/* NLM client handle */
@@ -225,6 +228,8 @@ struct nfs_server {
 	unsigned short		mountd_port;
 	unsigned short		mountd_protocol;
 	struct rpc_wait_queue	uoc_rpcwaitq;
+
+	struct dentry		*debugfs;
 };
 
 /* Server capabilities */

@@ -1086,6 +1086,7 @@ struct nfs_server *nfs4_create_server(struct nfs_mount_info *mount_info,
 	if (error < 0)
 		goto error;
 
+	nfs_server_debugfs_register(server);
 	return server;
 
 error:

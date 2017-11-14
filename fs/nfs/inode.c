@@ -2144,6 +2144,8 @@ static int __init init_nfs_fs(void)
 	if (err)
 		goto out0;
 
+	nfs_debugfs_init();
+
 	return 0;
 out0:
 	rpc_proc_unregister(&init_net, "nfs");
@@ -2181,6 +2183,9 @@ static void __exit exit_nfs_fs(void)
 	unregister_nfs_fs();
 	nfs_fs_proc_exit();
 	nfsiod_stop();
+	nfs_cleanup_server_ids();
+	nfs_cleanup_client_ids();
+	nfs_debugfs_exit();
 }
 
 /* Not quite true; I just maintain it */
