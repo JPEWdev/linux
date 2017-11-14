@@ -159,6 +159,7 @@ extern void nfs_clients_init(struct net *net);
 void nfs_cleanup_client_ids(void);
 extern struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *);
 int nfs_create_rpc_client(struct nfs_client *, const struct nfs_client_initdata *, rpc_authflavor_t);
+void nfs_client_failed(struct nfs_client *client, bool failed);
 struct nfs_client *nfs_get_client(const struct nfs_client_initdata *);
 int nfs_probe_fsinfo(struct nfs_server *server, struct nfs_fh *, struct nfs_fattr *);
 void nfs_server_insert_lists(struct nfs_server *);
