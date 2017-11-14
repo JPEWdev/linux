@@ -2102,6 +2102,8 @@ static int __init init_nfs_fs(void)
 {
 	int err;
 
+	nfs_debugfs_init();
+
 	err = register_pernet_subsys(&nfs_net_ops);
 	if (err < 0)
 		goto out9;
@@ -2165,6 +2167,9 @@ out7:
 out8:
 	unregister_pernet_subsys(&nfs_net_ops);
 out9:
+	nfs_cleanup_server_ids();
+	nfs_cleanup_client_ids();
+	nfs_debugfs_exit();
 	return err;
 }
 
@@ -2181,6 +2186,9 @@ static void __exit exit_nfs_fs(void)
 	unregister_nfs_fs();
 	nfs_fs_proc_exit();
 	nfsiod_stop();
+	nfs_cleanup_server_ids();
+	nfs_cleanup_client_ids();
+	nfs_debugfs_exit();
 }
 
 /* Not quite true; I just maintain it */

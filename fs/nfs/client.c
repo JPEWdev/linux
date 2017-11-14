@@ -142,6 +142,32 @@ void unregister_nfs_version(struct nfs_subversion *nfs)
 }
 EXPORT_SYMBOL_GPL(unregister_nfs_version);
 
+static DEFINE_IDA(nfs_client_ids);
+
+void
+nfs_cleanup_client_ids(void)
+{
+	ida_destroy(&nfs_client_ids);
+}
+
+static int
+nfs_alloc_client_id(struct nfs_client *client)
+{
+	int id;
+
+	id = ida_simple_get(&nfs_client_ids, 0, 0, GFP_KERNEL);
+	if (id < 0)
+		return id;
+	client->cl_id = id;
+	return 0;
+}
+
+static void
+nfs_free_client_id(struct nfs_client *client)
+{
+	ida_simple_remove(&nfs_client_ids, client->cl_id);
+}
+
 /*
  * Allocate a shared client record
  *
@@ -160,6 +186,8 @@ struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *cl_init)
 	clp->cl_nfs_mod = cl_init->nfs_mod;
 	if (!try_module_get(clp->cl_nfs_mod->owner))
 		goto error_dealloc;
+
+	nfs_alloc_client_id(clp);
 
 	clp->rpc_ops = clp->cl_nfs_mod->rpc_ops;
 
@@ -249,8 +277,11 @@ void nfs_free_client(struct nfs_client *clp)
 	if (clp->cl_machine_cred != NULL)
 		put_rpccred(clp->cl_machine_cred);
 
+	nfs_client_debugfs_unregister(clp);
+
 	put_net(clp->cl_net);
 	put_nfs_version(clp->cl_nfs_mod);
+	nfs_free_client_id(clp);
 	kfree(clp->cl_hostname);
 	kfree(clp->cl_acceptor);
 	kfree(clp);
@@ -380,6 +411,17 @@ nfs_found_client(const struct nfs_client_initdata *cl_init,
 	return clp;
 }
 
+static struct nfs_client *
+init_client(struct nfs_client *new, const struct nfs_client_initdata *cl_init)
+{
+	struct nfs_client *ret =
+		cl_init->nfs_mod->rpc_ops->init_client(new, cl_init);
+
+	if (ret)
+		nfs_client_debugfs_register(new);
+	return ret;
+}
+
 /*
  * Look up a client by IP address and protocol version
  * - creates a new record if one doesn't yet exist
@@ -411,7 +453,7 @@ struct nfs_client *nfs_get_client(const struct nfs_client_initdata *cl_init)
 					&nn->nfs_client_list);
 			spin_unlock(&nn->nfs_client_lock);
 			new->cl_flags = cl_init->init_flags;
-			return rpc_ops->init_client(new, cl_init);
+			return init_client(new, cl_init);
 		}
 
 		spin_unlock(&nn->nfs_client_lock);
@@ -856,6 +898,32 @@ void nfs_server_remove_lists(struct nfs_server *server)
 }
 EXPORT_SYMBOL_GPL(nfs_server_remove_lists);
 
+static DEFINE_IDA(nfs_server_ids);
+
+void
+nfs_cleanup_server_ids(void)
+{
+	ida_destroy(&nfs_server_ids);
+}
+
+static int
+nfs_alloc_server_id(struct nfs_server *server)
+{
+	int id;
+
+	id = ida_simple_get(&nfs_server_ids, 0, 0, GFP_KERNEL);
+	if (id < 0)
+		return id;
+	server->id = id;
+	return 0;
+}
+
+static void
+nfs_free_server_id(struct nfs_server *server)
+{
+	ida_simple_remove(&nfs_server_ids, server->id);
+}
+
 /*
  * Allocate and initialise a server record
  */
@@ -866,6 +934,8 @@ struct nfs_server *nfs_alloc_server(void)
 	server = kzalloc(sizeof(struct nfs_server), GFP_KERNEL);
 	if (!server)
 		return NULL;
+
+	nfs_alloc_server_id(server);
 
 	server->client = server->client_acl = ERR_PTR(-EINVAL);
 
@@ -879,10 +949,8 @@ struct nfs_server *nfs_alloc_server(void)
 	atomic_set(&server->active, 0);
 
 	server->io_stats = nfs_alloc_iostats();
-	if (!server->io_stats) {
-		kfree(server);
-		return NULL;
-	}
+	if (!server->io_stats)
+		goto out_error;
 
 	ida_init(&server->openowner_id);
 	ida_init(&server->lockowner_id);
@@ -890,6 +958,10 @@ struct nfs_server *nfs_alloc_server(void)
 	rpc_init_wait_queue(&server->uoc_rpcwaitq, "NFS UOC");
 
 	return server;
+out_error:
+	nfs_free_server_id(server);
+	kfree(server);
+	return NULL;
 }
 EXPORT_SYMBOL_GPL(nfs_alloc_server);
 
@@ -910,9 +982,12 @@ void nfs_free_server(struct nfs_server *server)
 
 	nfs_put_client(server->nfs_client);
 
+	nfs_server_debugfs_unregister(server);
+
 	ida_destroy(&server->lockowner_id);
 	ida_destroy(&server->openowner_id);
 	nfs_free_iostats(server->io_stats);
+	nfs_free_server_id(server);
 	kfree(server);
 	nfs_release_automount_timer();
 }
@@ -973,6 +1048,7 @@ struct nfs_server *nfs_create_server(struct nfs_mount_info *mount_info,
 	nfs_server_insert_lists(server);
 	server->mount_time = jiffies;
 	nfs_free_fattr(fattr);
+	nfs_server_debugfs_register(server);
 	return server;
 
 error:
@@ -1033,6 +1109,7 @@ struct nfs_server *nfs_clone_server(struct nfs_server *source,
 	server->mount_time = jiffies;
 
 	nfs_free_fattr(fattr_fsinfo);
+	nfs_server_debugfs_register(server);
 	return server;
 
 out_free_server:

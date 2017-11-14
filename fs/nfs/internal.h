@@ -157,6 +157,7 @@ extern void nfs_umount(const struct nfs_mount_request *info);
 /* client.c */
 extern const struct rpc_program nfs_program;
 extern void nfs_clients_init(struct net *net);
+void nfs_cleanup_client_ids(void);
 extern struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *);
 int nfs_create_rpc_client(struct nfs_client *, const struct nfs_client_initdata *, rpc_authflavor_t);
 struct nfs_client *nfs_get_client(const struct nfs_client_initdata *);
@@ -166,6 +167,7 @@ void nfs_server_remove_lists(struct nfs_server *);
 void nfs_init_timeout_values(struct rpc_timeout *to, int proto, int timeo, int retrans);
 int nfs_init_server_rpcclient(struct nfs_server *, const struct rpc_timeout *t,
 		rpc_authflavor_t);
+void nfs_cleanup_server_ids(void);
 struct nfs_server *nfs_alloc_server(void);
 void nfs_server_copy_userdata(struct nfs_server *, struct nfs_server *);
 
@@ -560,6 +562,14 @@ extern int nfs_sillyrename(struct inode *dir, struct dentry *dentry);
 void nfs_init_cinfo_from_dreq(struct nfs_commit_info *cinfo,
 			      struct nfs_direct_req *dreq);
 extern ssize_t nfs_dreq_bytes_left(struct nfs_direct_req *dreq);
+
+/* debugfs.c */
+void nfs_server_debugfs_register(struct nfs_server *server);
+void nfs_server_debugfs_unregister(struct nfs_server* server);
+void nfs_client_debugfs_register(struct nfs_client* client);
+void nfs_client_debugfs_unregister(struct nfs_client* client);
+void nfs_debugfs_exit(void);
+void __init nfs_debugfs_init(void);
 
 /* nfs4proc.c */
 extern struct nfs_client *nfs4_init_client(struct nfs_client *clp,
